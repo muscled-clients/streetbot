@@ -1,103 +1,193 @@
-import Image from "next/image";
+'use client';
+
+import { useRef, useEffect, useState } from 'react';
+import { useChat } from 'ai/react';
+// import { ServiceCard } from '@/components/ServiceCard';
+// import { ServiceDisplay } from '@/components/ServiceDisplay';
+import { ChatMessage } from '@/components/ChatMessage';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  interface Service {
+    id: string;
+    title: string;
+    category: string;
+    description?: string;
+    address_street?: string;
+    address_city?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    hours_of_operation?: string;
+    languages?: string[];
+    accessibility?: string;
+  }
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const [services, setServices] = useState<Service[]>([]);
+  // const [messageServices, setMessageServices] = useState<Record<string, Service[]>>({});
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+    api: '/api/chat',
+    initialMessages: [
+      {
+        id: '1',
+        role: 'assistant',
+        content: "Hi there! I'm StreetBot, and I'm here to help you find essential services in the Greater Toronto Area. Whether you need food, shelter, healthcare, or any other support, I'm here to listen and help connect you with the right resources. What can I help you with today?",
+      },
+    ],
+    onResponse: (response) => {
+      // Extract services from headers
+      const servicesHeader = response.headers.get('X-Services');
+      if (servicesHeader) {
+        try {
+          const parsedServices = JSON.parse(servicesHeader);
+          setServices(parsedServices);
+        } catch (e) {
+          console.error('Failed to parse services:', e);
+        }
+      }
+    },
+    onFinish: () => {
+      // Focus input after response
+      inputRef.current?.focus();
+    },
+  });
+
+  useEffect(() => {
+    // Keep input focused when not loading
+    if (!isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading]);
+
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleSubmit(e);
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-black">
+      {/* Header */}
+      <header className="bg-[#1a1a1a] border-b border-gray-800 px-4 py-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-[#FFD700]">StreetBot</h1>
+              <p className="text-[#999999] text-sm mt-1">
+                Find essential services in the Greater Toronto Area
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[#666666] text-xs">A tool by</p>
+              <p className="text-[#999999] text-sm font-medium">StreetVoices.ca</p>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </header>
+
+      {/* Messages - Option 2: Inline Services */}
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="max-w-4xl mx-auto space-y-4">
+          {messages.map((message, index) => (
+            <ChatMessage
+              key={message.id}
+              role={message.role as 'user' | 'assistant'}
+              content={message.content}
+              services={
+                message.role === 'assistant' && index === messages.length - 1
+                  ? services
+                  : undefined
+              }
+            />
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-[#1a1a1a] rounded-2xl px-4 py-3">
+                <div className="flex space-x-2">
+                  <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-pulse delay-75"></div>
+                  <div className="w-2 h-2 bg-[#FFD700] rounded-full animate-pulse delay-150"></div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Services Display - Option 1: Separate Section (Commented out for Option 2) */}
+      {/* {services.length > 0 && (
+        <ServiceDisplay services={services} />
+      )} */}
+
+      {/* Quick Actions */}
+      <div className="px-4 py-3 bg-[#1a1a1a] border-t border-gray-800">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex gap-2 flex-wrap mb-3">
+            <button
+              onClick={() => setInput("I need food")}
+              className="px-4 py-2 bg-[#FFD700] text-black rounded-button text-sm font-medium hover:bg-yellow-500 transition-colors"
+            >
+              🍲 Food
+            </button>
+            <button
+              onClick={() => setInput("I need shelter")}
+              className="px-4 py-2 bg-[#FFD700] text-black rounded-button text-sm font-medium hover:bg-yellow-500 transition-colors"
+            >
+              🏠 Shelter
+            </button>
+            <button
+              onClick={() => setInput("I'm in crisis and need help")}
+              className="px-4 py-2 bg-[#FFD700] text-black rounded-button text-sm font-medium hover:bg-yellow-500 transition-colors"
+            >
+              🆘 Crisis Help
+            </button>
+            <button
+              onClick={() => setInput("I need healthcare")}
+              className="px-4 py-2 bg-[#FFD700] text-black rounded-button text-sm font-medium hover:bg-yellow-500 transition-colors"
+            >
+              🏥 Healthcare
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Input Form */}
+      <form onSubmit={onSubmit} className="px-4 pb-4 bg-[#1a1a1a]">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={handleInputChange}
+              placeholder="Type your message here..."
+              className="flex-1 bg-[#000000] text-white px-4 py-3 rounded-button border border-gray-700 focus:border-[#FFD700] focus:outline-none transition-colors placeholder:text-[#999999]"
+              autoFocus
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="px-6 py-3 bg-[#FFD700] text-black rounded-button font-medium hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Send
+            </button>
+          </div>
+          {/* Footer */}
+          <div className="mt-3 text-center">
+            <p className="text-[#666666] text-xs">
+              Built by{' '}
+              <a 
+                href="https://www.linkedin.com/in/roadtocode/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-[#999999] hover:text-[#FFD700] transition-colors"
+              >
+                Muscled Inc.
+              </a>
+            </p>
+          </div>
+        </div>
+      </form>
     </div>
   );
 }
