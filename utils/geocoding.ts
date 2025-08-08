@@ -37,6 +37,37 @@ export class GeocodingService {
       };
     }
     
+    // Handle ambiguous station names by making reasonable assumptions
+    // For "bloor station" -> assume "bloor-yonge station"
+    // For "dundas station" -> assume "dundas station"
+    const ambiguousStations: { [key: string]: string } = {
+      'bloor station': 'bloor-yonge station',
+      'bloor': 'yonge and bloor',
+      'dundas': 'yonge and dundas',
+      'dundas station': 'dundas station',
+      'queen station': 'queen station',
+      'king station': 'king station',
+      'union': 'union station',
+      'college': 'college station',
+      'wellesley': 'wellesley station',
+      'rosedale': 'rosedale station'
+    };
+    
+    // Check for ambiguous station names
+    for (const [ambiguous, assumed] of Object.entries(ambiguousStations)) {
+      if (lowercaseMessage.includes(ambiguous)) {
+        if (this.LOCATION_CACHE.has(assumed)) {
+          const coords = this.LOCATION_CACHE.get(assumed)!;
+          console.log(`Ambiguous location '${ambiguous}' assumed as '${assumed}'`);
+          return {
+            coordinates: coords,
+            address: assumed,
+            searchRadius: 5000
+          };
+        }
+      }
+    }
+    
     // Check for simple patterns like "kipling station" or "yonge dundas"
     const words = lowercaseMessage.split(/\s+/);
     if (words.length === 2) {

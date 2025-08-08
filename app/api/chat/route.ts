@@ -17,23 +17,26 @@ Core principles:
 - Never make assumptions about someone's situation
 - Respect dignity and autonomy
 
-IMPORTANT: Location is required to find services.
+IMPORTANT: When location is ambiguous, make a reasonable assumption and confirm.
 
 When someone asks for help:
-1. First acknowledge their need with empathy
-2. ALWAYS ask for their location if not provided (neighborhood, intersection, or postal code)
-3. DO NOT search for services until you have a location
-4. Once you have location, confirm you're searching in that area
-5. DO NOT list service names or details in your response
+1. Acknowledge their need with empathy
+2. If location is unclear or ambiguous, make an assumption and confirm
+3. Search for services immediately when you have any location info
+4. DO NOT list service names or details in your response
 
-Example conversation flow:
+Example conversation flows:
+
+User: "I need food near bloor station"
+You: "I'm searching for food services near Bloor-Yonge station. If you meant a different Bloor station like Bloor West or Old Mill, just let me know. I've found several food options nearby."
+
+User: "food near dundas" 
+You: "I'm searching for food services near Yonge and Dundas. If you meant Dundas West or another Dundas location, let me know and I'll adjust. I've found several options within walking distance."
+
 User: "I need food"
-You: "I understand you need food, and I'm here to help. To find the closest food services to you, could you share what neighborhood you're in or a nearby intersection?"
+You: "I can help you find food services. What neighborhood or intersection are you near?"
 
-User: "I'm near Yonge and Dundas"
-You: "Thank you. I'm searching for food services near Yonge and Dundas. I've found several options within walking distance."
-
-Keep responses brief and always prioritize getting location information first.`;
+Be proactive - when in doubt, search first and let them correct if needed.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -98,7 +101,7 @@ export async function POST(req: NextRequest) {
           
           if (searchError) {
             console.error('Location search error:', searchError);
-            // Try a simpler query without the RPC function
+            // Try a simpler query without the RPC function - but include all fields
             const { data: fallbackResults } = await supabase
               .from('services')
               .select('*')
@@ -107,8 +110,10 @@ export async function POST(req: NextRequest) {
               .limit(20);
               
             services = fallbackResults || [];
+            console.log('Fallback service sample:', services[0] ? Object.keys(services[0]) : 'No services');
           } else {
             services = searchResults || [];
+            console.log('RPC service sample:', services[0] ? Object.keys(services[0]) : 'No services');
             
             // If too few results, expand search
             if (services && services.length < 3) {
@@ -183,11 +188,15 @@ User message: "${latestMessage}"
 Provide helpful details about this service. Focus on what they offer, who they help, and how to access their services.`
       : hasLocation 
       ? `Found ${services?.length || 0} relevant services near ${locationDescription}.
+${locationDescription.includes('yonge and') && latestMessage.includes('bloor') && !latestMessage.includes('yonge') ? 
+  'IMPORTANT: You assumed they meant Bloor-Yonge station. Mention this assumption and that they can specify a different Bloor location if needed.' : ''}
+${locationDescription.includes('yonge and') && latestMessage.includes('dundas') && !latestMessage.includes('yonge') ? 
+  'IMPORTANT: You assumed they meant Yonge and Dundas. Mention this assumption and that they can specify a different Dundas location if needed.' : ''}
 
 User message: "${latestMessage}"
 
 ${services?.length > 0 ? 
-  `Tell them you found ${services.length} services near their location. Mention the closest ones are ${services[0]?.distance_km || 'nearby'}. They will see the service cards below.` : 
+  `Tell them you found ${services.length} services. They will see the service cards below.` : 
   "Let them know you're looking but haven't found specific matches yet. Suggest they try a broader search area."}
 
 Remember: Do NOT list full service details, just acknowledge you found options.`

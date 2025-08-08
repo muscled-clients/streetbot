@@ -13,14 +13,19 @@ export function ModernCards({ services }: { services: any[] }) {
             </div>
             
             <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-gray-400">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="line-clamp-1">
-                  {service.address_street ? `${service.address_street}, ${service.address_city}` : service.address_city}
-                </span>
+              <div className="text-gray-400">
+                <div className="flex items-start gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    {service.address_street && (
+                      <div className="line-clamp-1">{service.address_street}</div>
+                    )}
+                    <div className="text-xs">{service.address_city || 'Toronto, ON'}</div>
+                  </div>
+                </div>
               </div>
               
               {service.distance_km && (
@@ -60,6 +65,21 @@ export function ModernCards({ services }: { services: any[] }) {
                   Call Now
                 </a>
               )}
+              <a 
+                href={service.latitude && service.longitude 
+                  ? `https://www.google.com/maps/dir/?api=1&destination=${service.latitude},${service.longitude}`
+                  : `https://www.google.com/maps/search/${encodeURIComponent(service.address_street || service.title)},+Toronto,+ON`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+                title="Get directions in Google Maps"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Maps
+              </a>
               <button 
                 onClick={() => {
                   // Create a custom event to send message about this service
@@ -193,10 +213,13 @@ export function ModernScroll({ services }: { services: any[] }) {
             </div>
             
             <div className="space-y-2 text-sm text-gray-400 mb-4">
-              <p className="flex items-center gap-2">
-                <span className="text-[#FFD700]">📍</span>
-                {service.address_street ? `${service.address_street}, ${service.address_city}` : service.address_city}
-              </p>
+              <div>
+                <span className="text-[#FFD700] mr-2">📍</span>
+                {service.address_street && (
+                  <span className="block ml-6">{service.address_street}</span>
+                )}
+                <span className="block ml-6 text-xs">{service.address_city || 'Toronto, ON'}</span>
+              </div>
               {service.distance_km && (
                 <p className="flex items-center gap-2">
                   <span className="text-[#FFD700]">🚶</span>
@@ -218,9 +241,24 @@ export function ModernScroll({ services }: { services: any[] }) {
               )}
             </div>
             
-            <button className="w-full bg-[#FFD700] text-black px-4 py-2 rounded-xl font-medium hover:bg-yellow-500 transition-colors">
-              Get Directions
-            </button>
+            <div className="flex gap-2">
+              <button className="flex-1 bg-[#FFD700] text-black px-4 py-2 rounded-xl font-medium hover:bg-yellow-500 transition-colors">
+                Details
+              </button>
+              {(service.latitude && service.longitude) && (
+                <a 
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${service.latitude},${service.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#1a1a1a] text-white px-4 py-2 rounded-xl font-medium border border-gray-700 hover:border-[#FFD700] transition-colors flex items-center justify-center"
+                  title="Get directions"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                </a>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -248,11 +286,23 @@ export function ModernMap({ services }: { services: any[] }) {
             
             <div className="flex-1">
               <h5 className="text-white font-medium">{service.title}</h5>
-              <p className="text-gray-400 text-sm">{service.address_street}, {service.address_city}</p>
+              <div className="text-gray-400 text-sm">
+                {service.address_street && (
+                  <div>{service.address_street}</div>
+                )}
+                <div className="text-xs">{service.address_city || 'Toronto, ON'}</div>
+              </div>
               <div className="flex gap-3 mt-2">
-                <button className="text-[#FFD700] text-sm hover:underline">
-                  Directions
-                </button>
+                {(service.latitude && service.longitude) && (
+                  <a 
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${service.latitude},${service.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#FFD700] text-sm hover:underline"
+                  >
+                    Directions
+                  </a>
+                )}
                 {service.phone && (
                   <button className="text-[#FFD700] text-sm hover:underline">
                     Call
