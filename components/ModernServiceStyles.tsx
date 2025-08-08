@@ -18,11 +18,8 @@ export function ModernCards({ services, selectedServiceId, onDetailsClick }: Mod
                 : 'border-gray-800 hover:border-[#FFD700] hover:shadow-[#FFD700]/10'
             }`}
           >
-            <div className="flex justify-between items-start mb-3">
+            <div className="mb-3">
               <h4 className="text-white font-semibold line-clamp-2">{service.title}</h4>
-              <span className="text-[#FFD700] text-xs bg-[#FFD700]/10 px-2 py-1 rounded-full whitespace-nowrap">
-                {service.category}
-              </span>
             </div>
             
             <div className="space-y-2 text-sm">

@@ -25,9 +25,11 @@ export default function Home() {
   }
 
   const [services, setServices] = useState<Service[]>([]);
-  const [preservedServices, setPreservedServices] = useState<Service[]>([]);
+  const [messageServicesMap, setMessageServicesMap] = useState<Map<string, Service[]>>(new Map());
+  const [serviceMessageOrder, setServiceMessageOrder] = useState<string[]>([]); // Track order for FIFO
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [servicesMessageId, setServicesMessageId] = useState<string | null>(null); // Track which message has services
+  const [lastUserQuery, setLastUserQuery] = useState<string>(''); // Track user's query for category detection
+  const MAX_SERVICE_SETS = 5; // Keep maximum 5 sets of services
   // const [messageServices, setMessageServices] = useState<Record<string, Service[]>>({});
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [locationError, setLocationError] = useState<string>('');
@@ -54,17 +56,76 @@ export default function Home() {
         try {
           const parsedServices = JSON.parse(servicesHeader);
           setServices(parsedServices);
-          // If we have services and no preserved ones yet, preserve them and track the message
-          if (parsedServices.length > 0 && preservedServices.length === 0) {
-            setPreservedServices(parsedServices);
-            // Set the message ID to the current last assistant message
-            // This will be set properly after the message is added
-            setTimeout(() => {
-              const assistantMessages = messages.filter(m => m.role === 'assistant');
-              if (assistantMessages.length > 0) {
-                setServicesMessageId(assistantMessages[assistantMessages.length - 1].id);
+          
+          // Only store services if they're new (different from ALL existing sets)
+          if (parsedServices.length > 0) {
+            // Check if user is asking for a different category
+            const isDifferentCategory = () => {
+              // Service category keywords
+              const categories = {
+                food: ['food', 'meal', 'hunger', 'hungry', 'eat', 'nutrition', 'food bank', 'pantry'],
+                shelter: ['shelter', 'housing', 'homeless', 'sleep', 'bed', 'stay', 'accommodation'],
+                health: ['health', 'medical', 'doctor', 'clinic', 'hospital', 'healthcare', 'nurse'],
+                mental: ['mental', 'counseling', 'therapy', 'crisis', 'support', 'wellness'],
+                legal: ['legal', 'lawyer', 'law', 'rights', 'court', 'justice'],
+                employment: ['job', 'work', 'employment', 'career', 'resume', 'training']
+              };
+              
+              // Detect category from user query
+              let queryCategory = null;
+              for (const [cat, keywords] of Object.entries(categories)) {
+                if (keywords.some(keyword => lastUserQuery.includes(keyword))) {
+                  queryCategory = cat;
+                  break;
+                }
               }
-            }, 100);
+              
+              // If we detected a category and have previous services, check if it's different
+              if (queryCategory && serviceMessageOrder.length > 0) {
+                // This is a different category request, always accept new services
+                console.log(`User asking for ${queryCategory} services - accepting as new set`);
+                return true;
+              }
+              
+              return false;
+            };
+            
+            // Check if these services are substantially different from existing ones
+            const areServicesDifferent = () => {
+              // First check if it's a different category request
+              if (isDifferentCategory()) return true;
+              
+              // Get the most recent service set
+              const recentServices = serviceMessageOrder.length > 0 
+                ? messageServicesMap.get(serviceMessageOrder[serviceMessageOrder.length - 1]) 
+                : null;
+              
+              if (!recentServices) return true;
+              
+              // Create sets of IDs for comparison
+              const newServiceIds = new Set(parsedServices.map((s: Service) => s.id));
+              const recentServiceIds = new Set(recentServices.map(s => s.id));
+              
+              // Count how many services match
+              let matchingCount = 0;
+              newServiceIds.forEach(id => {
+                if (recentServiceIds.has(id)) matchingCount++;
+              });
+              
+              // If less than 50% match, these are new services
+              const matchPercentage = matchingCount / parsedServices.length;
+              return matchPercentage < 0.5;
+            };
+            
+            // If services are different, prepare to add them to a new message
+            if (areServicesDifferent()) {
+              console.log('New services detected, will attach to next assistant message');
+              // Services will be attached when the message arrives
+              // Clear any selected service highlighting
+              setSelectedServiceId(null);
+            } else {
+              console.log('Similar services returned, not creating new set');
+            }
           }
         } catch (e) {
           console.error('Failed to parse services:', e);
@@ -121,6 +182,8 @@ export default function Home() {
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Store the user's query to detect category changes
+    setLastUserQuery(input.toLowerCase());
     handleSubmit(e);
   };
 
@@ -171,16 +234,85 @@ export default function Home() {
             // Determine which services to show
             let servicesToShow = undefined;
             
-            // Only show services on the specific message they were originally attached to
-            if (servicesMessageId && message.id === servicesMessageId && preservedServices.length > 0) {
-              servicesToShow = preservedServices;
-            } else if (!servicesMessageId && message.role === 'assistant' && services.length > 0 && index === messages.length - 1) {
-              // For the first time services appear, show them on the last message
-              servicesToShow = services;
-              // Set this as the services message
-              if (!preservedServices.length) {
-                setServicesMessageId(message.id);
-                setPreservedServices(services);
+            // Check if this message has services in the Map
+            if (messageServicesMap.has(message.id)) {
+              servicesToShow = messageServicesMap.get(message.id);
+            } else if (message.role === 'assistant' && services.length > 0 && index === messages.length - 1) {
+              // This is a new assistant message with services to attach
+              const isDifferentCategory = () => {
+                const categories = {
+                  food: ['food', 'meal', 'hunger', 'hungry', 'eat', 'nutrition', 'food bank', 'pantry'],
+                  shelter: ['shelter', 'housing', 'homeless', 'sleep', 'bed', 'stay', 'accommodation'],
+                  health: ['health', 'medical', 'doctor', 'clinic', 'hospital', 'healthcare', 'nurse'],
+                  mental: ['mental', 'counseling', 'therapy', 'crisis', 'support', 'wellness'],
+                  legal: ['legal', 'lawyer', 'law', 'rights', 'court', 'justice'],
+                  employment: ['job', 'work', 'employment', 'career', 'resume', 'training']
+                };
+                
+                let queryCategory = null;
+                for (const [cat, keywords] of Object.entries(categories)) {
+                  if (keywords.some(keyword => lastUserQuery.includes(keyword))) {
+                    queryCategory = cat;
+                    break;
+                  }
+                }
+                
+                if (queryCategory && serviceMessageOrder.length > 0) {
+                  return true;
+                }
+                return false;
+              };
+              
+              const areServicesDifferent = () => {
+                // First check if it's a different category request
+                if (isDifferentCategory()) return true;
+                
+                const recentServices = serviceMessageOrder.length > 0 
+                  ? messageServicesMap.get(serviceMessageOrder[serviceMessageOrder.length - 1]) 
+                  : null;
+                
+                if (!recentServices) return true;
+                
+                const newServiceIds = new Set(services.map(s => s.id));
+                const recentServiceIds = new Set(recentServices.map(s => s.id));
+                
+                let matchingCount = 0;
+                newServiceIds.forEach(id => {
+                  if (recentServiceIds.has(id)) matchingCount++;
+                });
+                
+                const matchPercentage = matchingCount / services.length;
+                return matchPercentage < 0.5;
+              };
+              
+              // Only attach if these are new services
+              if (areServicesDifferent()) {
+                servicesToShow = services;
+                
+                // Update the Map and order tracking
+                setTimeout(() => {
+                  setMessageServicesMap(prev => {
+                    const newMap = new Map(prev);
+                    newMap.set(message.id, services);
+                    
+                    // Remove oldest if we exceed limit
+                    if (newMap.size > MAX_SERVICE_SETS && serviceMessageOrder.length >= MAX_SERVICE_SETS) {
+                      const oldestMessageId = serviceMessageOrder[0];
+                      newMap.delete(oldestMessageId);
+                    }
+                    
+                    return newMap;
+                  });
+                  
+                  setServiceMessageOrder(prev => {
+                    const newOrder = [...prev, message.id];
+                    // Keep only the last MAX_SERVICE_SETS entries
+                    if (newOrder.length > MAX_SERVICE_SETS) {
+                      return newOrder.slice(-MAX_SERVICE_SETS);
+                    }
+                    return newOrder;
+                  });
+                }, 0);
               }
             }
             
