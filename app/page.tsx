@@ -25,10 +25,15 @@ export default function Home() {
   }
 
   const [services, setServices] = useState<Service[]>([]);
+  const [preservedServices, setPreservedServices] = useState<Service[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [servicesMessageId, setServicesMessageId] = useState<string | null>(null); // Track which message has services
   // const [messageServices, setMessageServices] = useState<Record<string, Service[]>>({});
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [locationError, setLocationError] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
     api: '/api/chat',
@@ -49,6 +54,18 @@ export default function Home() {
         try {
           const parsedServices = JSON.parse(servicesHeader);
           setServices(parsedServices);
+          // If we have services and no preserved ones yet, preserve them and track the message
+          if (parsedServices.length > 0 && preservedServices.length === 0) {
+            setPreservedServices(parsedServices);
+            // Set the message ID to the current last assistant message
+            // This will be set properly after the message is added
+            setTimeout(() => {
+              const assistantMessages = messages.filter(m => m.role === 'assistant');
+              if (assistantMessages.length > 0) {
+                setServicesMessageId(assistantMessages[assistantMessages.length - 1].id);
+              }
+            }, 100);
+          }
         } catch (e) {
           console.error('Failed to parse services:', e);
         }
@@ -66,6 +83,11 @@ export default function Home() {
       inputRef.current?.focus();
     }
   }, [isLoading]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Request geolocation on component mount
   useEffect(() => {
@@ -102,6 +124,23 @@ export default function Home() {
     handleSubmit(e);
   };
 
+  // Handle Details button click
+  const handleDetailsClick = (service: Service) => {
+    // Set the selected service for highlighting
+    setSelectedServiceId(service.id);
+    
+    // Fill the input with the details request
+    const detailsMessage = `Tell me more about ${service.title}`;
+    setInput(detailsMessage);
+    
+    // Auto-submit after a brief delay so user sees the text
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.requestSubmit();
+      }
+    }, 100);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-black">
       {/* Header */}
@@ -128,19 +167,34 @@ export default function Home() {
       {/* Messages - Option 2: Inline Services */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-4xl mx-auto space-y-4">
-          {messages.map((message, index) => (
-            <ChatMessage
-              key={message.id}
-              role={message.role as 'user' | 'assistant'}
-              content={message.content}
-              services={
-                // Show services on the message that triggered them, not just the last one
-                message.role === 'assistant' && services && services.length > 0 && index === messages.length - 1
-                  ? services
-                  : undefined
+          {messages.map((message, index) => {
+            // Determine which services to show
+            let servicesToShow = undefined;
+            
+            // Only show services on the specific message they were originally attached to
+            if (servicesMessageId && message.id === servicesMessageId && preservedServices.length > 0) {
+              servicesToShow = preservedServices;
+            } else if (!servicesMessageId && message.role === 'assistant' && services.length > 0 && index === messages.length - 1) {
+              // For the first time services appear, show them on the last message
+              servicesToShow = services;
+              // Set this as the services message
+              if (!preservedServices.length) {
+                setServicesMessageId(message.id);
+                setPreservedServices(services);
               }
-            />
-          ))}
+            }
+            
+            return (
+              <ChatMessage
+                key={message.id}
+                role={message.role as 'user' | 'assistant'}
+                content={message.content}
+                services={servicesToShow}
+                selectedServiceId={selectedServiceId}
+                onDetailsClick={handleDetailsClick}
+              />
+            );
+          })}
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-[#1a1a1a] rounded-2xl px-4 py-3">
@@ -152,6 +206,8 @@ export default function Home() {
               </div>
             </div>
           )}
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
         </div>
       </div>
 
@@ -195,7 +251,7 @@ export default function Home() {
       )}
 
       {/* Input Form */}
-      <form onSubmit={onSubmit} className="px-4 pb-4 bg-[#1a1a1a]">
+      <form ref={formRef} onSubmit={onSubmit} className="px-4 pb-4 bg-[#1a1a1a]">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-2">
             <input

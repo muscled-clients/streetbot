@@ -16,9 +16,11 @@ interface ChatMessageProps {
   role: 'user' | 'assistant';
   content: string;
   services?: Service[];
+  selectedServiceId?: string | null;
+  onDetailsClick?: (service: Service) => void;
 }
 
-export function ChatMessage({ role, content, services }: ChatMessageProps) {
+export function ChatMessage({ role, content, services, selectedServiceId, onDetailsClick }: ChatMessageProps) {
   const isUser = role === 'user';
 
   // Choose display style based on content or service type
@@ -30,7 +32,11 @@ export function ChatMessage({ role, content, services }: ChatMessageProps) {
     // const isFood = content.toLowerCase().includes('food');
 
     // Use ModernCards (crisis design) for all responses
-    return <ModernCards services={services} />;
+    return <ModernCards 
+      services={services} 
+      selectedServiceId={selectedServiceId} 
+      onDetailsClick={onDetailsClick} 
+    />;
   };
 
   return (

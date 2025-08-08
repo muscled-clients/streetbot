@@ -1,10 +1,23 @@
 // Modern Style 1: Horizontal Scroll Cards with Actions
-export function ModernCards({ services }: { services: any[] }) {
+interface ModernCardsProps {
+  services: any[];
+  selectedServiceId?: string | null;
+  onDetailsClick?: (service: any) => void;
+}
+
+export function ModernCards({ services, selectedServiceId, onDetailsClick }: ModernCardsProps) {
   return (
     <div className="mt-4">
       <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
         {services.map((service) => (
-          <div key={service.id} className="min-w-[300px] bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-2xl p-4 border border-gray-800 hover:border-[#FFD700] transition-all hover:shadow-lg hover:shadow-[#FFD700]/10">
+          <div 
+            key={service.id} 
+            className={`min-w-[300px] bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-2xl p-4 border transition-all hover:shadow-lg ${
+              selectedServiceId === service.id 
+                ? 'border-[#FFD700] shadow-lg shadow-[#FFD700]/20' 
+                : 'border-gray-800 hover:border-[#FFD700] hover:shadow-[#FFD700]/10'
+            }`}
+          >
             <div className="flex justify-between items-start mb-3">
               <h4 className="text-white font-semibold line-clamp-2">{service.title}</h4>
               <span className="text-[#FFD700] text-xs bg-[#FFD700]/10 px-2 py-1 rounded-full whitespace-nowrap">
@@ -82,15 +95,19 @@ export function ModernCards({ services }: { services: any[] }) {
               </a>
               <button 
                 onClick={() => {
-                  // Create a custom event to send message about this service
-                  const input = document.querySelector('input[type="text"]') as HTMLInputElement;
-                  if (input) {
-                    input.value = `Tell me more about ${service.title}`;
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    // Trigger form submit
-                    const form = input.closest('form');
-                    if (form) {
-                      form.requestSubmit();
+                  if (onDetailsClick) {
+                    onDetailsClick(service);
+                  } else {
+                    // Fallback to old behavior if no callback provided
+                    const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+                    if (input) {
+                      input.value = `Tell me more about ${service.title}`;
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      // Trigger form submit
+                      const form = input.closest('form');
+                      if (form) {
+                        form.requestSubmit();
+                      }
                     }
                   }
                 }}
