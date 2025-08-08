@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { OpenAI } from 'openai';
 import { OpenAIStream, StreamingTextResponse } from 'ai';
 import { supabase } from '@/lib/supabase/client';
+import { GeocodingService } from '@/utils/geocoding';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -36,64 +37,119 @@ Keep responses brief and always prioritize getting location information first.`;
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    const { messages, userLocation } = await req.json();
     
     // Get the latest user message
     const latestMessage = messages[messages.length - 1].content;
     
-    // Extract location from conversation
-    let userLocation = '';
-    const locationPatterns = [
-      /(?:near|at|around|in)\s+([^.,!?]+)/i,
-      /(yonge|dundas|queen|king|bloor|spadina|bay|university|college|ossington|bathurst)[^.,!?]*/i,
-      /(downtown|scarborough|etobicoke|north york|york|east york)/i,
-      /([a-z]\d[a-z]\s?\d[a-z]\d)/i, // Postal code
-    ];
-    
-    // Search through all messages for location
-    for (const msg of messages) {
-      for (const pattern of locationPatterns) {
-        const match = msg.content.match(pattern);
-        if (match) {
-          userLocation = match[1] || match[0];
-          break;
-        }
-      }
-      if (userLocation) break;
-    }
-    
-    const hasLocation = userLocation.length > 0;
+    // Check if user is asking about a specific service
+    const serviceDetailPattern = /tell me (?:more )?about (.+)|more (?:details|info|information) (?:about|on) (.+)|what (?:services|programs) does (.+) (?:offer|provide)|(.+) services|(.+) programs/i;
+    const serviceMatch = latestMessage.match(serviceDetailPattern);
     
     let services = null;
-    let queryEmbedding = null;
+    let hasLocation = false;
+    let locationDescription = '';
+    let isServiceQuery = false;
     
-    // Only search for services if we have location
-    if (hasLocation && messages.length > 2) { // More than just the initial greeting
-      // Generate embedding for the user's query
-      const embeddingResponse = await openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: latestMessage,
-      });
+    if (serviceMatch) {
+      // User is asking about a specific service
+      const serviceName = (serviceMatch[1] || serviceMatch[2] || serviceMatch[3] || serviceMatch[4] || serviceMatch[5]).trim();
       
-      queryEmbedding = embeddingResponse.data[0].embedding;
+      // Search for the service by name
+      const { data: serviceResults, error } = await supabase
+        .from('services')
+        .select('*')
+        .ilike('title', `%${serviceName}%`)
+        .limit(5);
       
-      // Search for relevant services using location-aware search
-      const { data: searchResults, error: searchError } = await supabase.rpc(
-        'search_services_by_location',
-        {
-          query_embedding: queryEmbedding,
-          user_location: userLocation,
-          match_count: 10,
-        }
-      );
-      
-      if (searchError) {
-        console.error('Search error:', searchError);
-        throw searchError;
+      if (serviceResults && serviceResults.length > 0) {
+        services = serviceResults;
+        isServiceQuery = true;
+        console.log(`📋 Found ${services.length} services matching: ${serviceName}`);
       }
-      
-      services = searchResults;
     }
+    
+    // Only do location search if not a service detail query
+    if (!isServiceQuery) {
+      // Detect location from the message using GeocodingService
+      const locationContext = GeocodingService.detectLocationIntent(latestMessage);
+      
+      // PRIORITIZE text-based location over browser geolocation
+      // This fixes the Morocco issue - text location always wins!
+      if (locationContext) {
+        hasLocation = true;
+        locationDescription = locationContext.address;
+        console.log(`📍 Detected location from text: ${locationContext.address} (${locationContext.coordinates.lat}, ${locationContext.coordinates.lng})`);
+        
+        // Extract radius preference from message
+        const customRadius = GeocodingService.extractRadiusPreference(latestMessage);
+        
+        try {
+          // Search for services using PostGIS location search
+          const { data: searchResults, error: searchError } = await supabase.rpc(
+            'search_services_by_location',
+            {
+              user_lat: locationContext.coordinates.lat,
+              user_lng: locationContext.coordinates.lng,
+              radius_meters: customRadius,
+              max_results: 20,
+            }
+          );
+          
+          if (searchError) {
+            console.error('Location search error:', searchError);
+            // Try a simpler query without the RPC function
+            const { data: fallbackResults } = await supabase
+              .from('services')
+              .select('*')
+              .not('latitude', 'is', null)
+              .not('longitude', 'is', null)
+              .limit(20);
+              
+            services = fallbackResults || [];
+          } else {
+            services = searchResults || [];
+            
+            // If too few results, expand search
+            if (services && services.length < 3) {
+              console.log(`Only ${services.length} services found, expanding search...`);
+              // Try wider radius
+              const { data: expandedResults } = await supabase.rpc(
+                'search_services_by_location',
+                {
+                  user_lat: locationContext.coordinates.lat,
+                  user_lng: locationContext.coordinates.lng,
+                  radius_meters: 10000, // 10km
+                  max_results: 20,
+                }
+              );
+              services = expandedResults || services;
+            }
+          }
+        } catch (err) {
+          console.error('Error in location search:', err);
+          services = [];
+        }
+      } else if (userLocation && userLocation.lat && userLocation.lng) {
+        // Use browser geolocation
+        hasLocation = true;
+        locationDescription = 'your current location';
+        
+        const { data: searchResults, error: searchError } = await supabase.rpc(
+          'search_services_by_location',
+          {
+            user_lat: userLocation.lat,
+            user_lng: userLocation.lng,
+            radius_meters: 5000,
+            max_results: 20,
+          }
+        );
+        
+        if (!searchError) {
+          services = searchResults;
+        }
+      }
+    }  // Close the if (!isServiceQuery) block
     
     // Format services for the context
     interface ServiceResult {
@@ -107,25 +163,40 @@ export async function POST(req: NextRequest) {
       hours_of_operation?: string;
     }
     
-    // Format services for context (not currently used but may be needed for future enhancements)
-    // const servicesContext = services?.map((service: ServiceResult) => 
-    //   `Service: ${service.title}...`
-    // ).join('\n\n');
-    
     // Create the prompt with service context
-    const contextualPrompt = hasLocation 
-      ? `Found ${services?.length || 0} relevant services for the user's location: ${userLocation}.
+    const contextualPrompt = isServiceQuery 
+      ? `The user is asking about a specific service. Here are the details:
+
+${services?.map((s: any) => `
+Service: ${s.title}
+Category: ${s.category}
+Description: ${s.description || 'No description available'}
+Address: ${s.address_street ? `${s.address_street}, ` : ''}${s.address_city || 'Toronto'}
+Phone: ${s.phone || 'No phone listed'}
+Hours: ${s.hours_of_operation || 'Hours not specified'}
+Languages: ${Array.isArray(s.languages) ? s.languages.join(', ') : s.languages || 'Not specified'}
+Accessibility: ${s.accessibility || 'Not specified'}
+`).join('\n')}
 
 User message: "${latestMessage}"
 
-${services?.length > 0 ? "Tell them you found services near their location. They will see the cards below." : "Let them know you're looking but haven't found specific matches yet."}
-
-Remember: Do NOT list service details.`
-      : `User has NOT provided location yet.
+Provide helpful details about this service. Focus on what they offer, who they help, and how to access their services.`
+      : hasLocation 
+      ? `Found ${services?.length || 0} relevant services near ${locationDescription}.
 
 User message: "${latestMessage}"
 
-You MUST ask for their location (neighborhood, intersection, or postal code) to help them find services.`;
+${services?.length > 0 ? 
+  `Tell them you found ${services.length} services near their location. Mention the closest ones are ${services[0]?.distance_km || 'nearby'}. They will see the service cards below.` : 
+  "Let them know you're looking but haven't found specific matches yet. Suggest they try a broader search area."}
+
+Remember: Do NOT list full service details, just acknowledge you found options.`
+      : `User has NOT provided location yet and geolocation is not available.
+
+User message: "${latestMessage}"
+
+You MUST ask for their location (neighborhood, intersection like "Queen and Bloor", or postal code) to help them find services.
+Suggest popular intersections like: Yonge and Dundas, Queen and Bathurst, or King and Spadina.`;
     
     // Get streaming response from GPT-4
     const response = await openai.chat.completions.create({
@@ -148,10 +219,17 @@ You MUST ask for their location (neighborhood, intersection, or postal code) to 
       },
     });
     
-    // Return a StreamingTextResponse with services in headers
+    // Clean services to remove Unicode characters that break HTTP headers
+    const cleanServices = services ? JSON.parse(
+      JSON.stringify(services)
+        .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '') // Remove zero-width and formatting chars
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+    ) : [];
+    
+    // Return a StreamingTextResponse with cleaned services in headers
     return new StreamingTextResponse(stream, {
       headers: {
-        'X-Services': JSON.stringify(services || []),
+        'X-Services': JSON.stringify(cleanServices),
       },
     });
     

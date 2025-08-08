@@ -8,6 +8,8 @@ interface Service {
   address_street?: string;
   address_city?: string;
   phone?: string;
+  distance_km?: string;
+  distance_meters?: number;
 }
 
 interface ChatMessageProps {

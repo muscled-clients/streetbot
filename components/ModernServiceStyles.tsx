@@ -18,8 +18,28 @@ export function ModernCards({ services }: { services: any[] }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <span className="line-clamp-1">{service.address_city}</span>
+                <span className="line-clamp-1">
+                  {service.address_street ? `${service.address_street}, ${service.address_city}` : service.address_city}
+                </span>
               </div>
+              
+              {service.distance_km && (
+                <div className="flex items-center gap-2 text-[#FFD700]">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  <span className="font-medium">
+                    {service.distance_meters && service.distance_meters < 1000 
+                      ? `${Math.round(service.distance_meters / 10) * 10} meters` 
+                      : service.distance_km} away
+                    {service.distance_meters && service.distance_meters <= 2000 && (
+                      <span className="text-gray-400 text-xs ml-1">
+                        (~{Math.round(service.distance_meters / 80)} min walk)
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
               
               {service.phone && (
                 <div className="flex items-center gap-2 text-gray-400">
@@ -32,10 +52,30 @@ export function ModernCards({ services }: { services: any[] }) {
             </div>
             
             <div className="flex gap-2 mt-4">
-              <button className="flex-1 bg-[#FFD700] text-black px-3 py-2 rounded-lg text-sm font-medium hover:bg-yellow-500 transition-colors">
-                Call Now
-              </button>
-              <button className="flex-1 bg-[#1a1a1a] text-white px-3 py-2 rounded-lg text-sm font-medium border border-gray-700 hover:border-[#FFD700] transition-colors">
+              {service.phone && (
+                <a 
+                  href={`tel:${service.phone}`}
+                  className="flex-1 bg-[#FFD700] text-black px-3 py-2 rounded-lg text-sm font-medium hover:bg-yellow-500 transition-colors text-center"
+                >
+                  Call Now
+                </a>
+              )}
+              <button 
+                onClick={() => {
+                  // Create a custom event to send message about this service
+                  const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+                  if (input) {
+                    input.value = `Tell me more about ${service.title}`;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    // Trigger form submit
+                    const form = input.closest('form');
+                    if (form) {
+                      form.requestSubmit();
+                    }
+                  }
+                }}
+                className="flex-1 bg-[#1a1a1a] text-white px-3 py-2 rounded-lg text-sm font-medium border border-gray-700 hover:border-[#FFD700] transition-colors"
+              >
                 Details
               </button>
             </div>
@@ -65,7 +105,13 @@ export function ModernList({ services }: { services: any[] }) {
             <div className="flex-1 min-w-0">
               <h5 className="text-white font-medium truncate">{service.title}</h5>
               <p className="text-gray-500 text-sm truncate">
-                {service.address_city} • {service.phone || 'No phone'}
+                {service.address_city} 
+                {service.distance_meters ? 
+                  `• ${service.distance_meters < 1000 ? 
+                    `${Math.round(service.distance_meters / 10) * 10} meters` : 
+                    service.distance_km}` : ''}
+                {service.distance_meters && service.distance_meters <= 2000 ? ` (${Math.round(service.distance_meters / 80)} min walk)` : ''}
+                • {service.phone || 'No phone'}
               </p>
             </div>
             
@@ -97,7 +143,12 @@ export function ModernBubble({ services }: { services: any[] }) {
                     {service.title}
                   </h5>
                   <p className="text-gray-400 text-xs mt-1">
-                    {service.address_city}
+                    {service.address_city} 
+                    {service.distance_meters ? 
+                      `• ${service.distance_meters < 1000 ? 
+                        `${Math.round(service.distance_meters / 10) * 10} meters` : 
+                        service.distance_km}` : ''}
+                    {service.distance_meters && service.distance_meters <= 2000 ? ` (${Math.round(service.distance_meters / 80)} min)` : ''}
                   </p>
                 </div>
                 {service.phone && (
@@ -144,8 +195,21 @@ export function ModernScroll({ services }: { services: any[] }) {
             <div className="space-y-2 text-sm text-gray-400 mb-4">
               <p className="flex items-center gap-2">
                 <span className="text-[#FFD700]">📍</span>
-                {service.address_city}
+                {service.address_street ? `${service.address_street}, ${service.address_city}` : service.address_city}
               </p>
+              {service.distance_km && (
+                <p className="flex items-center gap-2">
+                  <span className="text-[#FFD700]">🚶</span>
+                  {service.distance_meters && service.distance_meters < 1000 
+                    ? `${Math.round(service.distance_meters / 10) * 10} meters` 
+                    : service.distance_km} away
+                  {service.distance_meters && service.distance_meters <= 2000 && (
+                    <span className="text-gray-400 text-xs">
+                      ({Math.round(service.distance_meters / 80)} min walk)
+                    </span>
+                  )}
+                </p>
+              )}
               {service.phone && (
                 <p className="flex items-center gap-2">
                   <span className="text-[#FFD700]">📞</span>
